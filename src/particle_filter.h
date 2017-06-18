@@ -21,6 +21,7 @@ struct Particle {
 	std::vector<int> associations;
 	std::vector<double> sense_x;
 	std::vector<double> sense_y;
+
 };
 
 
@@ -31,12 +32,12 @@ class ParticleFilter {
 	int num_particles; 
 	
 	
-	
 	// Flag, if filter is initialized
 	bool is_initialized;
 	
 	// Vector of weights of all particles
 	std::vector<double> weights;
+
 	
 public:
 	
