@@ -27,7 +27,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
     
     default_random_engine gen;
-    num_particles = 500;
+    num_particles = 50;
     normal_distribution<double> dist_x(x,std[0]);
     normal_distribution<double> dist_y(y,std[1]);
     normal_distribution<double> dist_psi(theta,std[2]);
@@ -39,7 +39,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         tmp.id  = i;
         tmp.x = dist_x(gen);
         tmp.y = dist_y(gen);
-        tmp.theta = dis_psi(gen);
+        tmp.theta = dist_psi(gen);
         tmp.weight = 1.0;
         particles.push_back(tmp);
     }
@@ -47,7 +47,8 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
     is_initialized = true;
 }
 
-void ParticleFilter::prediction(double delta_t, double std[], double velocity, double yaw_rate) {
+void ParticleFilter::prediction(double delta_t, double std[], double velocity, double yaw_rate) 
+{
 	// TODO: Add measurements to each particle and add random Gaussian noise.
 	// NOTE: When adding noise you may find std::normal_distribution and std::default_random_engine useful.
 	//  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
@@ -77,8 +78,6 @@ void ParticleFilter::prediction(double delta_t, double std[], double velocity, d
         particles[i].theta += dist_psi(gen);
     }
 }
-    
-}
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
 	// TODO: Find the predicted measurement that is closest to each observed measurement and assign the 
@@ -88,10 +87,6 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
     //
 }
 
-//the fact that I can only submit particle_filter.cpp means I can not change any of the existing structure nor I could add helper functions as part of the class.. so I can only add a non class function here and use it in my class fucntion above. 
-//
-//PLEASE do not complain about my c++ style here as I had no choice. 
-//
 
 void transform( const LandmarkObs & obs, const Particle & par, double &t_x, double &t_y)
 {
@@ -99,8 +94,9 @@ void transform( const LandmarkObs & obs, const Particle & par, double &t_x, doub
     t_y = sin(par.theta) * obs.x + cos(par.theta) * obs.y + par.y;
 }
 
-void updateOneParticle(std::vector<LandmarkObs> &predicted, std::vector<LandmarkObs> & observations
+void updateOneParticle( const std::vector<Map::single_landmark_s> &predicted, const std::vector<LandmarkObs> & observations
                    ,Particle &par, double &std_x, double &std_y)
+{
     std::pair<int,double> min{-1,0.0};
     std::pair<double,double> xy{0.0,0.0};
     std::pair<double,double> p_xy{0.0,0.0};
@@ -111,13 +107,13 @@ void updateOneParticle(std::vector<LandmarkObs> &predicted, std::vector<Landmark
         for(const auto &pred : predicted)
         {
             transform(obs,par,xy.first,xy.second);
-            dis = dist(xy.first,xy.second,pred.x,pred.y);
+            dis = dist(xy.first,xy.second,pred.x_f,pred.y_f);
             if (min.first == -1 || dis < min.second) 
             {
-                min.first = pred.id;
+                min.first = pred.id_i;
                 min.second = dis;
-                p_xy.first = pred.x;
-                p_xy.second = pred.y;
+                p_xy.first = pred.x_f;
+                p_xy.second = pred.y_f;
             }
         }
 
@@ -146,13 +142,23 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   http://planning.cs.uiuc.edu/node99.html
 
     weights.clear();
+    double total = 0.0;
     for(auto &par : particles)
     {
         updateOneParticle(map_landmarks.landmark_list,observations,par
                           ,std_landmark[0],std_landmark[1] ); 
-        weights.push_back(par.weight);
+        if(par.weight < 0.000001)
+        {
+            par.weight = 0.000001;
+        }
+        total += par.weight;
     }
     
+    for(auto &par : particles)
+    {
+        par.weight = par.weight/total;
+        weights.push_back(par.weight);
+    }
 }
 
 void ParticleFilter::resample() 
@@ -164,15 +170,12 @@ void ParticleFilter::resample()
   std::discrete_distribution<> dist_w(weights.begin(), weights.end());
   default_random_engine gen;
 
+ std::vector<Particle> res;
  for (int p = 0; p<num_particles; p++) 
  {
-  dist_w(gen);
-  particles[densityVector(gen)].weights = -1.0;
+  res.push_back(particles[dist_w(gen)]);
  }
-
- auto notPicked = [](auto &a) {return a.weights != -1.0 ;};
- std::remove_if( particles.begin(),particles.end(),notPicked);
- num_particles = particles.size();
+ particles = res;
 }
 
 Particle ParticleFilter::SetAssociations(Particle particle, std::vector<int> associations, std::vector<double> sense_x, std::vector<double> sense_y)
